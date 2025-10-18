@@ -19,8 +19,6 @@ void fib(int* pbuffer,int a1, int a2, int N){
         ant = a1;
         fibnum = tmp + ant;
         
-        //si ejecuta primero, aqui libera al hijo de su deadlock
-
         for(int i = 0; i<N; i++){
                 // esperar turno
                 sem_wait(sw1);   //esperar turno de escritura
@@ -52,7 +50,6 @@ void fib(int* pbuffer,int a1, int a2, int N){
 void twopow(int *pbuffer, int a3, int N){
         int pow = 1;
         // calcular 2^a3
-        //si ejecuta primero, aqui libera al otro de su deadlock
         for(int i = 0; i<a3; i++){ pow*=2;}
 
         for(int j = 0; j<N; j++){
@@ -89,12 +86,16 @@ int main(int argc, char *argv[]) {
         int N = atoi(argv[4]);
 
         //validar existencia de p3 y p4
+        //si p3 y p4 existen, fallara la creacion con sem open y solo abrira los valores ya existentes, por lo que no se inicializaran con 5 si no con 0.
+        //en caso contrario se inicializaran con 5 y podremos identificar que no estan en ejecucion.
 
         sw1 = sem_open("fib_sem", O_CREAT | O_RDWR, 0666, 5);
         sw2 = sem_open("pow_sem", O_CREAT | O_RDWR, 0666, 5);
         //crear semaforo de mutex para el buffer.
         mutex = sem_open("mutexSem", O_CREAT, 0666, 1);
         rcsem= sem_open("raceSem", O_CREAT, 0666, 1);
+
+        //abrir recursos creados por p2 y p3.
         sr1 = sem_open("fdisplay_sem",0);
         sr2 = sem_open("pdisplay_sem",0);
 
@@ -113,12 +114,18 @@ int main(int argc, char *argv[]) {
                 sem_close(sw2);
                 sem_close(sr1);
                 sem_close(sr2);
+                sem_close(mutex);
+                sem_close(rcsem);
                 sem_unlink("fib_sem");
                 sem_unlink("pow_sem");
+                sem_unlink("raceSem");
+                sem_unlink("mutexSem");
                 return -1;
                
         }else if(sval1 <= 0 && sval2 <= 0){
                 printf("p3 y p4 listos y escuchando.%d %d\n", sval1, sval2);
+
+                //librear a p3 y p4 del deadlock inicial.
                 sem_post(sw1);
                 sem_post(sw2);
         }
@@ -149,10 +156,13 @@ int main(int argc, char *argv[]) {
                 char exval2[3];
                 sem_wait(rcsem);
 
-                printf("hijo gana la race.\n");
                 sem_getvalue(sw2, &sval2);
                 
-                printf("sw2 %d\n", sval2);
+                if (DBG){
+                        printf("hijo gana la race.\n");
+                        printf("sw2 %d\n", sval2);
+                }
+
                 if(sval2 == 0){
                         sem_post(sw2);
                 }
@@ -175,10 +185,13 @@ int main(int argc, char *argv[]) {
                 char exval1[3];
                 sem_wait(rcsem);
                 
-                printf("padre gana la race.\n");
                 sem_getvalue(sw1, &sval1);
 
-                printf("sw1 %d\n", sval1);
+                if(DBG){
+                        printf("padre gana la race.\n");
+                        printf("sw1 %d\n", sval1);
+                }
+
                 if(sval1 == 0){
                         sem_post(sw1);
                 }
