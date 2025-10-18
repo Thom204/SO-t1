@@ -28,6 +28,7 @@ int main(int argc, char *argv[]){
                 perror("mmap failed"); 
                 return 1;
         }
+        pbuffer[0]=0;
         int content;
         sw1 = sem_open("fib_sem", 0);
 
@@ -55,8 +56,6 @@ int main(int argc, char *argv[]){
                 sem_wait(sr1);
                 //sem_wait(buffermutex);
                 content = pbuffer[0];
-                sem_post(buffermutex);
-
                 if (content == -1){
                         //enviar mensaje de salida a p1.
                         printf("p3 termina. %d", content);
@@ -65,12 +64,12 @@ int main(int argc, char *argv[]){
                         sem_post(sw2);
                         write(pipe, response, sizeof(response));
                         break;
+                }else {
+                        printf("%d\n", content);
+                        sem_post(buffermutex);
+                        sem_post(sw2);
                 }
-                printf("%d\n", content);
-
                 // desbloquear el semaforo para las potencias.
-                sem_post(sw2);
-
         }
         munmap(pbuffer, sizeof(int));
         close(shm_descriptor);

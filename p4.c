@@ -55,7 +55,7 @@ int main(int argc, char *argv[]){
                 //sem_wait(buffermutex);
                 content = pbuffer[0];
 
-                sem_post(buffermutex);
+
                 if (content == -2){
                         //enviar mensaje de salida a pr2.
                         printf("p4 termina.%d", content);
@@ -64,9 +64,12 @@ int main(int argc, char *argv[]){
                         sem_post(sw1);
                         write(pipe, response, sizeof(response));
                         break;
+                }else {
+
+                        printf("%d\n", content);
+                        sem_post(buffermutex);
+                        sem_post(sw1);
                 }
-                printf("%d\n", content);
-                sem_post(sw1);
         }
         munmap(pbuffer, sizeof(int));
         close(shm_descriptor);

@@ -8,9 +8,9 @@
 #include <semaphore.h>
 #include <string.h>
 #include <stdlib.h>
-#define DBG 0
+#define DBG 1
 
-sem_t *sw1, *sr1, *sw2, *sr2,  *mutex;
+sem_t *sw1, *sr1, *sw2, *sr2, *rcsem, *mutex;
 
 // agregar err handling.
 void fib(int* pbuffer,int a1, int a2, int N){
@@ -19,7 +19,7 @@ void fib(int* pbuffer,int a1, int a2, int N){
         ant = a1;
         fibnum = tmp + ant;
         
-        sem_post(mutex); //si ejecuta primero, aqui libera al hijo de su deadlock
+        //si ejecuta primero, aqui libera al hijo de su deadlock
 
         for(int i = 0; i<N; i++){
                 // esperar turno
@@ -33,7 +33,7 @@ void fib(int* pbuffer,int a1, int a2, int N){
                 // escribir en buffer.
                 pbuffer[0] = fibnum;
 
-                if(DBG) {sleep(3);}
+                if(DBG) {sleep(1);}
 
                 // postear para lectura del consumidor p3.
                 sem_post(sr1);
@@ -47,7 +47,7 @@ void fib(int* pbuffer,int a1, int a2, int N){
 void twopow(int *pbuffer, int a3, int N){
         int pow = 1;
         // calcular 2^a3
-        sem_post(mutex); //si ejecuta primero, aqui libera al otro de su deadlock
+        //si ejecuta primero, aqui libera al otro de su deadlock
         for(int i = 0; i<a3; i++){ pow*=2;}
 
         for(int j = 0; j<N; j++){
@@ -59,7 +59,7 @@ void twopow(int *pbuffer, int a3, int N){
                 pbuffer[0] = pow;
                 pow *= 2;
 
-                if(DBG){sleep(3);}
+                if(DBG){sleep(1);}
 
                 // postear mutex para lectura.
                 sem_post(sr2);
@@ -83,15 +83,24 @@ int main(int argc, char *argv[]) {
         //validar existencia de p3 y p4
         int sval1, sval2;
 
-        sw1 = sem_open("fib_sem", O_CREAT | O_RDWR, 0666, 1);
-        sw2 = sem_open("pow_sem", O_CREAT | O_RDWR, 0666, 1);
+        sw1 = sem_open("fib_sem", O_CREAT | O_RDWR, 0666, 5);
+        sw2 = sem_open("pow_sem", O_CREAT | O_RDWR, 0666, 5);
+        //crear semaforo de mutex para el buffer.
+        mutex = sem_open("mutexSem", O_CREAT, 0666, 1);
+        rcsem= sem_open("raceSem", O_CREAT, 0666, 1);
         sr1 = sem_open("fdisplay_sem",0);
         sr2 = sem_open("pdisplay_sem",0);
+
+        if (mkfifo("/dev/shm/p1-p3_pipe", 0666) == -1 || mkfifo("/dev/shm/p2-p4_pipe", 0666) == -1) {
+                perror("pipe creation failure\n.");
+                return -1;
+        }
 
         // verificamos con sem_getvalue.
         sem_getvalue(sw1, &sval1);
         sem_getvalue(sw2, &sval2);
-        if(sval1 > 0 || sval2 > 0){
+
+        if(sval1 > 4 || sval2 > 4){
                 perror("p3. o p4.c no estan en ejecucion.");
                 sem_close(sw1);
                 sem_close(sw2);
@@ -100,18 +109,12 @@ int main(int argc, char *argv[]) {
                 sem_unlink("fib_sem");
                 sem_unlink("pow_sem");
                 return -1;
-        }
-        else if(sval1 == -1 && sval2 == -1){
+        }else if(sval1 == 0 && sval2 == 0){
                 printf("p3 y p4 listos y escuchando.\n");
+                sem_post(sw1);
+                sem_post(sw2);
         }
-        //crear semaforo de mutex para el buffer.
-        mutex = sem_open("mutexSem", O_CREAT, 0666, 1);
 
-        //permitir que p3 y p4 (bloqueados en sus wait, lean los semaforos ya creados.)
-        sem_post(sw1);
-        sem_post(sw2);
-        
-        //crear p2
         int shm_fd = shm_open("shareBuff", O_RDWR, 0666);
         if (shm_fd == -1) {
                 perror("shm open fail"); 
@@ -128,10 +131,6 @@ int main(int argc, char *argv[]) {
                 return -1;
         }
 
-        if (mkfifo("/dev/shm/p1-p3_pipe", 0666) == -1 || mkfifo("/dev/shm/p2-p4_pipe", 0666) == -1) {
-                perror("pipe creation failure\n.");
-                return -1;
-        }
 
         int rc = fork();
         if(rc < 0){
@@ -140,12 +139,18 @@ int main(int argc, char *argv[]) {
         }else if(rc==0){
                 int pipe2 = open("/dev/shm/p2-p4_pipe", O_RDONLY);
                 char exval2[3];
-                sem_post(sw2);
-                sem_wait(mutex);
-                //quien desbloquee el mutex primero inicia la ejecucion normalmente
-                
+                sem_wait(rcsem);
+
                 printf("hijo gana la race.\n");
-                //sem_post(mutex);
+                sem_getvalue(sw2, &sval2);
+                
+                printf("sw2 %d\n", sval2);
+                if (sval2 == 0){
+                    sem_post(sw2);
+                    sem_post(rcsem);
+                }       
+
+
                 twopow(pbuffer, a3, N);
 
                 //listen para esperar el codigo de cierre.
@@ -162,11 +167,17 @@ int main(int argc, char *argv[]) {
         }else{
                 int pipe1 = open("/dev/shm/p1-p3_pipe", O_RDONLY);
                 char exval1[3];
-                sem_post(sw1);
-                sem_wait(mutex);
-
+                sem_wait(rcsem);
+                
                 printf("padre gana la race.\n");
-                //sem_post(mutex);
+                sem_getvalue(sw1, &sval1);
+
+                printf("sw1 %d\n", sval1);
+                if (sval1 == 0){
+                    sem_post(sw1);
+                    sem_post(rcsem);
+                }
+
                 fib(pbuffer, a1, a2, N);
                 
                 if(pipe1 < 0){
