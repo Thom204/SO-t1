@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <unistd.h>
-#include <pthread.h>
 #include <math.h>
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -8,7 +7,7 @@
 #include <semaphore.h>
 #include <stdlib.h>
 
-sem_t *sw1, *sr1, *sw2, *sr2, *buffermutex;
+sem_t *sw1, *sr1, *sw2, *sr2,*rcsem, *buffermutex;
 
 int main(int argc, char *argv[]){
         //por lo visto los buffer tienen que tener descriptores como si fueran archivos para poderse mmpaear.
@@ -29,9 +28,9 @@ int main(int argc, char *argv[]){
                 return 1;
         }
         pbuffer[0]=0;
+        
         int content;
-        sw1 = sem_open("fib_sem", 0);
-
+        int sval;
 
         // al crear el semaforo del buffer, p1 hace dos post para avisar a p3 que abra el semaforo.
         sw1 = sem_open("fib_sem", O_CREAT | O_RDWR,0666,0);
@@ -40,6 +39,7 @@ int main(int argc, char *argv[]){
 
         sw2 = sem_open("pow_sem", 0);
         buffermutex = sem_open("mutexSem", 0);
+        rcsem = sem_open("raceSem",0);
         int pipe = open("/dev/shm/p1-p3_pipe", O_WRONLY);
         if(buffermutex != SEM_FAILED && sw2 != SEM_FAILED && sw1 != SEM_FAILED && sr1 !=SEM_FAILED){
                 printf("p3 armado y escuchando\n");
@@ -67,6 +67,11 @@ int main(int argc, char *argv[]){
                 }else {
                         printf("%d\n", content);
                         sem_post(buffermutex);
+                        
+                        sem_getvalue(rcsem, &sval);
+                        if (sval == 0){
+                            sem_post(rcsem);  //si hay alguien esperando al semaforo de rc, (p1 inicio primero y es la primera ronda), liberar  a p2 de su wait de race condition.
+                        }
                         sem_post(sw2);
                 }
                 // desbloquear el semaforo para las potencias.

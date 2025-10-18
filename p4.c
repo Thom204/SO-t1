@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <unistd.h>
-#include <pthread.h>
 #include <math.h>
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -8,14 +7,13 @@
 #include <semaphore.h>
 #include <stdlib.h>
 
-sem_t *sw1, *sw2, *sr2, *buffermutex;
+sem_t *sw1, *sw2, *sr2,*rcsem, *buffermutex;
 
 int main(int argc, char *argv[]){
         //por lo visto los buffer tienen que tener descriptores como si fueran archivos para poderse mmpaear.
         //shm_open, crea el descriptor que funciona como una especie de handler.
         
         sw2 = sem_open("pow_sem", O_CREAT | O_RDWR, 0666, 0);
-        //sw2 = sem_open("pow_sem", 0);
         sr2 = sem_open("pdisplay_sem", O_CREAT | O_RDWR, 0666, 0);
         sem_wait(sw2);
 
@@ -35,8 +33,10 @@ int main(int argc, char *argv[]){
         }
 
         int content;
+        int sval;
         sw1 = sem_open("fib_sem", 0);
         buffermutex = sem_open("mutexSem", 0);
+        rcsem = sem_open("raceSem", 0);
         int pipe = open("/dev/shm/p2-p4_pipe", O_WRONLY);
         if (buffermutex != SEM_FAILED && sw2 != SEM_FAILED && sw1 != SEM_FAILED && sr2 != SEM_FAILED){ 
                 printf("p4 armado y escuchando\n");
@@ -68,8 +68,13 @@ int main(int argc, char *argv[]){
 
                         printf("%d\n", content);
                         sem_post(buffermutex);
+                        sem_getvalue(rcsem, &sval);
+                        if(sval == 0){
+                            sem_post(rcsem);   //si hay alguien esperando a rcsem, es el turno 1 y p2 inició, posteamos para liberar a p1 de su wait rc. 
+                        }
                         sem_post(sw1);
                 }
+
         }
         munmap(pbuffer, sizeof(int));
         close(shm_descriptor);

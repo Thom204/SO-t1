@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <unistd.h>
-#include <pthread.h>
 #include <math.h>
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -11,6 +10,7 @@
 #define DBG 1
 
 sem_t *sw1, *sr1, *sw2, *sr2, *rcsem, *mutex;
+int sval1, sval2;
 
 // agregar err handling.
 void fib(int* pbuffer,int a1, int a2, int N){
@@ -31,9 +31,14 @@ void fib(int* pbuffer,int a1, int a2, int N){
                 ant = fibnum;
                 fibnum += tmp;
                 // escribir en buffer.
-                pbuffer[0] = fibnum;
 
-                if(DBG) {sleep(1);}
+
+                if(DBG){
+                        sleep(1);
+                        pbuffer[0]++;
+                }else{
+                        pbuffer[0] = fibnum;
+                }
 
                 // postear para lectura del consumidor p3.
                 sem_post(sr1);
@@ -56,10 +61,13 @@ void twopow(int *pbuffer, int a3, int N){
                 sem_wait(mutex);    //bloquear mutex
 
                 // RC
-                pbuffer[0] = pow;
+                if(DBG){
+                        sleep(1);
+                        pbuffer[0]++;
+                }else{
+                        pbuffer[0] = pow;
+                }
                 pow *= 2;
-
-                if(DBG){sleep(1);}
 
                 // postear mutex para lectura.
                 sem_post(sr2);
@@ -81,7 +89,6 @@ int main(int argc, char *argv[]) {
         int N = atoi(argv[4]);
 
         //validar existencia de p3 y p4
-        int sval1, sval2;
 
         sw1 = sem_open("fib_sem", O_CREAT | O_RDWR, 0666, 5);
         sw2 = sem_open("pow_sem", O_CREAT | O_RDWR, 0666, 5);
@@ -109,8 +116,9 @@ int main(int argc, char *argv[]) {
                 sem_unlink("fib_sem");
                 sem_unlink("pow_sem");
                 return -1;
-        }else if(sval1 == 0 && sval2 == 0){
-                printf("p3 y p4 listos y escuchando.\n");
+               
+        }else if(sval1 <= 0 && sval2 <= 0){
+                printf("p3 y p4 listos y escuchando.%d %d\n", sval1, sval2);
                 sem_post(sw1);
                 sem_post(sw2);
         }
@@ -145,11 +153,9 @@ int main(int argc, char *argv[]) {
                 sem_getvalue(sw2, &sval2);
                 
                 printf("sw2 %d\n", sval2);
-                if (sval2 == 0){
-                    sem_post(sw2);
-                    sem_post(rcsem);
-                }       
-
+                if(sval2 == 0){
+                        sem_post(sw2);
+                }
 
                 twopow(pbuffer, a3, N);
 
@@ -173,9 +179,8 @@ int main(int argc, char *argv[]) {
                 sem_getvalue(sw1, &sval1);
 
                 printf("sw1 %d\n", sval1);
-                if (sval1 == 0){
-                    sem_post(sw1);
-                    sem_post(rcsem);
+                if(sval1 == 0){
+                        sem_post(sw1);
                 }
 
                 fib(pbuffer, a1, a2, N);
@@ -198,12 +203,15 @@ int main(int argc, char *argv[]) {
                 sem_close(sw2);
                 sem_close(sr2);
                 sem_close(mutex);
+                sem_close(rcsem);
                 sem_unlink("fib_sem");
                 sem_unlink("pow_sem");
                 sem_unlink("pdisplay_sem");
                 sem_unlink("fdisplay_sem");
                 sem_unlink("mutexSem");
+                sem_unlink("raceSem");
                 unlink("/dev/shm/p1-p3_pipe");
                 unlink("/dev/shm/p2-p4_pipe");
+                
         return 0;
 }
