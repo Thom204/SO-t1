@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #define DBG 1
 
-sem_t *sw1, *sr1, *sw2, *sr2, *rcsem, *mutex;
+sem_t *sw1, *sr1, *sw2, *sr2, *rcsem;
 int sval1, sval2;
 
 // agregar err handling.
@@ -22,7 +22,6 @@ void fib(int* pbuffer,int a1, int a2, int N){
         for(int i = 0; i<N; i++){
                 // esperar turno
                 sem_wait(sw1);   //esperar turno de escritura
-                sem_wait(mutex); //bloquear mutex para que p2 no pueda leer.
 
                 // RC
                 tmp = ant;
@@ -42,7 +41,6 @@ void fib(int* pbuffer,int a1, int a2, int N){
                 sem_post(sr1);
         }
         sem_wait(sw1);
-        sem_wait(mutex);
         pbuffer[0] = -1;
         sem_post(sr1);
 }
@@ -55,7 +53,6 @@ void twopow(int *pbuffer, int a3, int N){
         for(int j = 0; j<N; j++){
                 //esperar turno
                 sem_wait(sw2);      //turno de escritura de productor
-                sem_wait(mutex);    //bloquear mutex
 
                 // RC
                 if(DBG){
@@ -70,7 +67,6 @@ void twopow(int *pbuffer, int a3, int N){
                 sem_post(sr2);
         }
         sem_wait(sw2);
-        sem_wait(mutex);
         pbuffer[0] = -2;
         sem_post(sr2);
 }
@@ -92,7 +88,6 @@ int main(int argc, char *argv[]) {
         sw1 = sem_open("fib_sem", O_CREAT | O_RDWR, 0666, 5);
         sw2 = sem_open("pow_sem", O_CREAT | O_RDWR, 0666, 5);
         //crear semaforo de mutex para el buffer.
-        mutex = sem_open("mutexSem", O_CREAT, 0666, 1);
         rcsem= sem_open("raceSem", O_CREAT, 0666, 1);
 
         //abrir recursos creados por p2 y p3.
@@ -114,12 +109,12 @@ int main(int argc, char *argv[]) {
                 sem_close(sw2);
                 sem_close(sr1);
                 sem_close(sr2);
-                sem_close(mutex);
                 sem_close(rcsem);
                 sem_unlink("fib_sem");
                 sem_unlink("pow_sem");
                 sem_unlink("raceSem");
-                sem_unlink("mutexSem");
+                unlink("/dev/shm/p1-p3_pipe");
+                unlink("/dev/shm/p2-p4_pipe");
                 return -1;
                
         }else if(sval1 <= 0 && sval2 <= 0){
@@ -215,13 +210,11 @@ int main(int argc, char *argv[]) {
                 sem_close(sr1);
                 sem_close(sw2);
                 sem_close(sr2);
-                sem_close(mutex);
                 sem_close(rcsem);
                 sem_unlink("fib_sem");
                 sem_unlink("pow_sem");
                 sem_unlink("pdisplay_sem");
                 sem_unlink("fdisplay_sem");
-                sem_unlink("mutexSem");
                 sem_unlink("raceSem");
                 unlink("/dev/shm/p1-p3_pipe");
                 unlink("/dev/shm/p2-p4_pipe");
