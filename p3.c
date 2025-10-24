@@ -7,7 +7,7 @@
 #include <semaphore.h>
 #include <stdlib.h>
 
-sem_t *sw1, *sr1, *sw2, *sr2,*rcsem;
+sem_t *sw1, *sr1, *sw2, *sr2,*rcsem, *buffermutex;
 
 int main(int argc, char *argv[]){
         //por lo visto los buffer tienen que tener descriptores como si fueran archivos para poderse mmpaear.
@@ -38,9 +38,10 @@ int main(int argc, char *argv[]){
         sem_wait(sw1);
 
         sw2 = sem_open("pow_sem", 0);
+        buffermutex = sem_open("mutexSem", 0);
         rcsem = sem_open("raceSem",0);
         int pipe = open("/dev/shm/p1-p3_pipe", O_WRONLY);
-        if(sw2 != SEM_FAILED && sw1 != SEM_FAILED && sr1 !=SEM_FAILED){
+        if(buffermutex != SEM_FAILED && sw2 != SEM_FAILED && sw1 != SEM_FAILED && sr1 !=SEM_FAILED){
                 printf("p3 armado y escuchando\n");
         }else{
                 perror("error de armado de los semaforos");
@@ -59,11 +60,13 @@ int main(int argc, char *argv[]){
                         //enviar mensaje de salida a p1.
                         printf("p3 termina. %d", content);
                         char response[3] = "-3";
-                        sem_post(sw2);
+                        sem_post(buffermutex);
+                        //sem_post(sw2);
                         write(pipe, response, sizeof(response));
                         break;
                 }else {
                         printf("%d\n", content);
+                        sem_post(buffermutex);
                         
                         sem_getvalue(rcsem, &sval);
                         if (sval == 0){
@@ -78,6 +81,7 @@ int main(int argc, char *argv[]){
         sem_close(sw1);
         sem_close(sr1);
         sem_close(sw2);
-        close(pipe);
+        sem_close(buffermutex);
+        //close(pipe);
         return 0;
 }
