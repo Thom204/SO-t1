@@ -19,12 +19,12 @@ int pipe1 = -1;
 int pipe2 = -1;
 
 sem_t *semaphoreList[] = {NULL, NULL, NULL, NULL, NULL};
-char *nameList[] = {"fib_sem", "fdisplay_sem", "pow_sem", "pdisplay_sem", "saceSem"};
+char *nameList[] = {"fib_sem", "fdisplay_sem", "pow_sem", "pdisplay_sem", "raceSem"};
 
 void clean_resources(){
         for(int i = 0; i<5; i++){
                 if(semaphoreList[i] == NULL){
-                        break;
+                        continue;
                 }else{
                         sem_close(semaphoreList[i]);
                         sem_unlink(nameList[i]);
@@ -65,7 +65,9 @@ void terminate(){
         clean_resources();
         // codigo para enviar señal de interrupcion a p3 y p4.
         if(fork() == 0){
-                execlp("bash", "bash", "-c", "pkill -x SIGINT p3; pkill -x SIGINT p4;", NULL);
+                execlp("bash", "bash", "-c", "pkill -x -SIGINT p3; pkill -x -SIGINT p4;", NULL);
+        }else{
+                wait(NULL);
         }
 }
 
@@ -199,17 +201,14 @@ int main(int argc, char *argv[]) {
         semaphoreList[3]= sr2;
         semaphoreList[4]= rcsem;
 
-        if(verifySems() == -1){
-                perror("error abriendo algun semaforo");
-                terminate();
-                return -1;
-        }
-
         if(mkfifo("/dev/shm/p1-p3_pipe", 0666) == -1|| 
            mkfifo("/dev/shm/p2-p4_pipe", 0666) == -1) {
                 perror("pipe creation failure\n.");
                 terminate();
                 return -1;
+        }else{
+                pipe1 = -2;
+                pipe2 = -2;
         }
 
         // verificamos con sem_getvalue.
@@ -243,7 +242,15 @@ int main(int argc, char *argv[]) {
                         terminate();
                         return -1;
                 }
+        }        
+
+        if(verifySems() == -1){
+                perror("error abriendo algun semaforo");
+                terminate();
+                return -1;
         }
+
+
 
         shm_fd = shm_open("shareBuff", O_RDWR, 0666);
         if (shm_fd == -1) {

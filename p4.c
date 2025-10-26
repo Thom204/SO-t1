@@ -96,7 +96,7 @@ int main(int argc, char *argv[]){
                 }
 
         }
-        clean_resources();;
+        clean_resources();
         //close(pipe);
         return 0;
 }
