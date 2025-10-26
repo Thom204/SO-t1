@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <signal.h>
 
-sem_t *sw1, *sr1, *sw2, *sr2,*rcsem, *buffermutex;
+sem_t *sw1, *sr1, *sw2, *sr2,*rcsem;
 int *pbuffer = NULL;
 int shm_descriptor = -1;
 
@@ -19,7 +19,6 @@ void clean_resources(){
         sem_close(sw1);
         sem_close(sr1);
         sem_close(sw2);
-        sem_close(buffermutex);
 }
 
 
@@ -58,10 +57,9 @@ int main(int argc, char *argv[]){
         sem_wait(sw1);
 
         sw2 = sem_open("pow_sem", 0);
-        buffermutex = sem_open("mutexSem", 0);
         rcsem = sem_open("raceSem",0);
         int pipe = open("/dev/shm/p1-p3_pipe", O_WRONLY);
-        if(buffermutex != SEM_FAILED && sw2 != SEM_FAILED && sw1 != SEM_FAILED && sr1 !=SEM_FAILED){
+        if(sw2 != SEM_FAILED && sw1 != SEM_FAILED && sr1 !=SEM_FAILED){
                 printf("p3 armado y escuchando\n");
         }else{
                 perror("error de armado de los semaforos");
@@ -80,13 +78,11 @@ int main(int argc, char *argv[]){
                         //enviar mensaje de salida a p1.
                         printf("p3 termina. %d", content);
                         char response[3] = "-3";
-                        sem_post(buffermutex);
                         //sem_post(sw2);
                         write(pipe, response, sizeof(response));
                         break;
                 }else {
                         printf("%d\n", content);
-                        sem_post(buffermutex);
                         
                         sem_getvalue(rcsem, &sval);
                         if (sval == 0){

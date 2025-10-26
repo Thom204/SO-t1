@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <signal.h>
 
-sem_t *sw1, *sw2, *sr2,*rcsem, *buffermutex; 
+sem_t *sw1, *sw2, *sr2,*rcsem; 
 int *pbuffer = NULL; 
 int shm_descriptor = -1;
 
@@ -18,7 +18,6 @@ void clean_resources(){
         close(shm_descriptor);
         sem_close(sw1);
         sem_close(sw2);
-        sem_close(buffermutex);
 
 }
 
@@ -55,10 +54,9 @@ int main(int argc, char *argv[]){
         int content;
         int sval;
         sw1 = sem_open("fib_sem", 0);
-        buffermutex = sem_open("mutexSem", 0);
         rcsem = sem_open("raceSem", 0);
         int pipe = open("/dev/shm/p2-p4_pipe", O_WRONLY);
-        if (buffermutex != SEM_FAILED && sw2 != SEM_FAILED && sw1 != SEM_FAILED && sr2 != SEM_FAILED){ 
+        if (sw2 != SEM_FAILED && sw1 != SEM_FAILED && sr2 != SEM_FAILED){ 
                 printf("p4 armado y escuchando\n");
         }else{
                 perror("error armando semaforos");
@@ -80,14 +78,12 @@ int main(int argc, char *argv[]){
                         //enviar mensaje de salida a pr2.
                         printf("p4 termina.%d", content);
                         char response[3] = "-3";
-                        sem_post(buffermutex);
                         //sem_post(sw1);
                         write(pipe, response, sizeof(response));
                         break;
                 }else {
 
                         printf("%d\n", content);
-                        sem_post(buffermutex);
                         sem_getvalue(rcsem, &sval);
                         if(sval == 0){
                             sem_post(rcsem);   //si hay alguien esperando a rcsem, es el turno 1 y p2 inició, posteamos para liberar a p1 de su wait rc. 
