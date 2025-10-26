@@ -6,8 +6,28 @@
 #include <sys/stat.h>
 #include <semaphore.h>
 #include <stdlib.h>
+#include <signal.h>
 
-sem_t *sw1, *sw2, *sr2,*rcsem, *buffermutex;
+sem_t *sw1, *sw2, *sr2,*rcsem, *buffermutex; 
+int *pbuffer = NULL; 
+int shm_descriptor = -1;
+
+void clean_resources(){
+
+        munmap(pbuffer, sizeof(int));
+        close(shm_descriptor);
+        sem_close(sw1);
+        sem_close(sw2);
+        sem_close(buffermutex);
+
+}
+
+
+void handler(int sig){
+	printf("señal receptada\n");
+	clean_resources();
+	_exit(EXIT_FAILURE);
+}
 
 int main(int argc, char *argv[]){
         //por lo visto los buffer tienen que tener descriptores como si fueran archivos para poderse mmpaear.
@@ -18,14 +38,14 @@ int main(int argc, char *argv[]){
         sem_wait(sw2);
 
 
-        int shm_descriptor = shm_open("shareBuff", O_RDWR, 0666);   //todavía no se cual es el mode indicado, el ejemplo de man usa 0600.
+        shm_descriptor = shm_open("shareBuff", O_RDWR, 0666);   //todavía no se cual es el mode indicado, el ejemplo de man usa 0600.
         
         
         if (shm_descriptor == -1 || ftruncate(shm_descriptor, sizeof(int)) == -1) {
                 perror("shm error"); 
                 return -1;
         }
-        int *pbuffer = (int *) mmap(NULL, sizeof(int), PROT_READ, MAP_SHARED, shm_descriptor, 0); 
+        pbuffer = (int *) mmap(NULL, sizeof(int), PROT_READ, MAP_SHARED, shm_descriptor, 0); 
 
         if (pbuffer == MAP_FAILED) {
                 perror("mmap failed"); 
@@ -76,11 +96,7 @@ int main(int argc, char *argv[]){
                 }
 
         }
-        munmap(pbuffer, sizeof(int));
-        close(shm_descriptor);
-        sem_close(sw1);
-        sem_close(sw2);
-        sem_close(buffermutex);
+        clean_resources();;
         //close(pipe);
         return 0;
 }

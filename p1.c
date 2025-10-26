@@ -7,10 +7,14 @@
 #include <semaphore.h>
 #include <string.h>
 #include <stdlib.h>
+#include <signal.h>
+#include <sys/wait.h>
 
-int DBG = 0;
-sem_t *sw1, *sr1, *sw2, *sr2, *rcsem, *mutex;
+int DBG = 0; sem_t *sw1, *sr1, *sw2, *sr2, *rcsem, *mutex;
 int sval1, sval2;
+int *pbuffer = NULL;
+int shm_fd = -1;
+
 
 // agregar err handling.
 void fib(int* pbuffer,int a1, int a2, int N){
@@ -21,8 +25,16 @@ void fib(int* pbuffer,int a1, int a2, int N){
         
         for(int i = 0; i<N; i++){
                 // esperar turno
-                sem_wait(sw1);   //esperar turno de escritura
-                sem_wait(mutex); //bloquear mutex para que p2 no pueda leer.
+
+		// esperar turno de escritura
+	        if( sem_wait(sw1) == -1 ){
+			perror("sem_wait(sw1) failed");
+			exit(1);}
+
+		// bloquear mutex para que p2 no pueda leer
+                if( sem_wait(mutex) == -1){
+			perror("sem_wait(mutex) failed");
+			exit(1);}
 
                 // RC
                 tmp = ant;
@@ -75,6 +87,34 @@ void twopow(int *pbuffer, int a3, int N){
         sem_post(sr2);
 }
 
+void clean_resources(){
+
+	munmap(pbuffer, sizeof(int));
+        close(shm_fd);
+        shm_unlink("shareBuff");
+        sem_close(sw1);
+        sem_close(sr1);
+        sem_close(sw2);
+        sem_close(sr2);
+        sem_close(mutex);
+        sem_close(rcsem);
+        sem_unlink("fib_sem");
+        sem_unlink("pow_sem");
+        sem_unlink("pdisplay_sem");
+        sem_unlink("fdisplay_sem");
+        sem_unlink("mutexSem");
+        sem_unlink("raceSem");
+        unlink("/dev/shm/p1-p3_pipe");
+        unlink("/dev/shm/p2-p4_pipe");
+
+}
+
+void handler(int sig){
+	printf("Señal receptada\n");
+	clean_resources(); //una vez interrumpido el proceso limpia
+	_exit(EXIT_FAILURE);
+}
+
 int main(int argc, char *argv[]) {
         if(argc == 6){
                 DBG = atoi(argv[5]);
@@ -86,6 +126,10 @@ int main(int argc, char *argv[]) {
         int a2 = atoi(argv[2]);
         int a3 = atoi(argv[3]);
         int N = atoi(argv[4]);
+
+	//Implementación del handler
+	signal(SIGINT, handler); //Termina el programa al presionar CTRL + C
+	signal(SIGTERM, handler); //Termina el programa cuando recibe señales de los otros procesos
 
         //validar existencia de p3 y p4
         //si p3 y p4 existen, fallara la creacion con sem open y solo abrira los valores ya existentes, por lo que no se inicializaran con 5 si no con 0.
@@ -110,8 +154,19 @@ int main(int argc, char *argv[]) {
         sem_getvalue(sw1, &sval1);
         sem_getvalue(sw2, &sval2);
 
-        if(sval1 > 4 || sval2 > 4){
-                perror("p3. o p4.c no estan en ejecucion.");
+	int error_sval = 0;  //Variable para controlar los cierres
+
+        if(sval1 > 4){
+		perror("p3.c no está en ejecucción");
+		error_sval = 1;
+	}
+
+        if(sval2 > 4){
+                perror("p4.c no está en ejecucción");
+                error_sval = 1;
+	}
+
+        if(error_sval == 1){
                 sem_close(sw1);
                 sem_close(sw2);
                 sem_close(sr1);
@@ -123,8 +178,9 @@ int main(int argc, char *argv[]) {
                 sem_unlink("raceSem");
                 sem_unlink("mutexSem");
                 return -1;
-               
-        }else if(sval1 <= 0 && sval2 <= 0){
+	}
+
+        else if(sval1 <= 0 && sval2 <= 0){
                 printf("p3 y p4 listos y escuchando.%d %d\n", sval1, sval2);
 
                 //librear a p3 y p4 del deadlock inicial.
@@ -132,7 +188,7 @@ int main(int argc, char *argv[]) {
                 sem_post(sw2);
         }
 
-        int shm_fd = shm_open("shareBuff", O_RDWR, 0666);
+        shm_fd = shm_open("shareBuff", O_RDWR, 0666);
         if (shm_fd == -1) {
                 perror("shm open fail"); 
                 return -1;
@@ -142,7 +198,7 @@ int main(int argc, char *argv[]) {
                 return -1;
         }
 
-        int *pbuffer = (int *) mmap(NULL, sizeof(int), PROT_WRITE | PROT_READ, MAP_SHARED, shm_fd, 0);               
+        pbuffer = (int *) mmap(NULL, sizeof(int), PROT_WRITE | PROT_READ, MAP_SHARED, shm_fd, 0);               
         if(pbuffer == MAP_FAILED){
                 perror("map fail");
                 return -1;
@@ -214,23 +270,8 @@ int main(int argc, char *argv[]) {
                 }
                 wait(NULL);     //wait para que los prints no queden feos.
         }
-                munmap(pbuffer, sizeof(int));
-                close(shm_fd);
-                shm_unlink("shareBuff");
-                sem_close(sw1);
-                sem_close(sr1);
-                sem_close(sw2);
-                sem_close(sr2);
-                sem_close(mutex);
-                sem_close(rcsem);
-                sem_unlink("fib_sem");
-                sem_unlink("pow_sem");
-                sem_unlink("pdisplay_sem");
-                sem_unlink("fdisplay_sem");
-                sem_unlink("mutexSem");
-                sem_unlink("raceSem");
-                unlink("/dev/shm/p1-p3_pipe");
-                unlink("/dev/shm/p2-p4_pipe");
-                
+                clean_resources(); 
+
         return 0;
 }
+
