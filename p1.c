@@ -62,10 +62,18 @@ int verifySems(){
 
 
 void terminate(){
+        //el objetivo de esta funcion es que las interrupciones por errores
+        //se propaguen entre procesos de modo que un error en cualquiera
+        //genere la terminación de todos.
+        //
+        //podra ser un mecanismo overkill pero no me voy a arriesgar a que
+        //algunos procesos queden en deadlock cuando otros terminan por errores
+        //ya que esto evita que lso primeros puedan liberar sus recursos.
+
         clean_resources();
         // codigo para enviar señal de interrupcion a p3 y p4.
         if(fork() == 0){
-                execlp("bash", "bash", "-c", "pkill -x -SIGINT p3; pkill -x -SIGINT p4;", NULL);
+                execlp("bash", "bash", "-c", "pkill -x -SIGTERM p3; pkill -x -SIGTERM p4;", NULL);
         }else{
                 wait(NULL);
         }
@@ -73,9 +81,16 @@ void terminate(){
 
 
 void handler(int sig){
-	    printf("Señal receptada\n");
-	    clean_resources(); //una vez interrumpido el proceso limpia
-	    _exit(EXIT_FAILURE);
+	    printf("Señal recibida\n");
+        if(sig == SIGINT){
+            //interrumpido por consola
+            terminate();
+	        exit(1);
+        }else if(sig == SIGTERM){
+            //interrumpido por otro proceso.
+            clean_resources();
+            exit(1);
+        }
 }
 
 
@@ -164,6 +179,9 @@ void twopow(int *pbuffer, int a3, int N){
 
 
 int main(int argc, char *argv[]) {
+        //añadido un modo debug que inmprime un buffer incremental
+        //y tiene esperas entre los prints, el proposito de esto es
+        //testear la sincronizacion.
         if(argc == 6){
                 DBG = atoi(argv[5]);
         }else if (argc < 5) {
@@ -177,7 +195,7 @@ int main(int argc, char *argv[]) {
 
 	    //Implementación del handler 
         ////Termina el programa al presionar CTRL + C
-	signal(SIGINT, handler);
+	    signal(SIGINT, handler);
         //Termina el programa cuando recibe señales de los otros procesos
         signal(SIGTERM, handler);         
 
@@ -235,7 +253,7 @@ int main(int argc, char *argv[]) {
 
 
         if(sval1 <= 0 && sval2 <= 0){
-                printf("p3 y p4 listos y escuchando.%d %d\n", sval1, sval2);
+                printf("p3 y p4 listos y escuchando.\n");
 
                 if(sem_post(sw1) == -1 || sem_post(sw2) == -1){
                         perror("post error");
@@ -318,7 +336,7 @@ int main(int argc, char *argv[]) {
                                 return -1;
                         }
                         if(atoi(exval2) == -3){
-                                printf("%dtermina p2.\n", atoi(exval2));
+                                printf("%d termina p2.\n", atoi(exval2));
                         }
                         if(sem_post(sw1) == -1){
                                 perror("post sw1 failed");
