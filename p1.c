@@ -11,7 +11,9 @@
 #include <sys/wait.h>
 
 int DBG = 0;
+
 sem_t *sw1, *sr1, *sw2, *sr2, *rcsem;
+
 int sval1, sval2;
 int *pbuffer = NULL;
 int shm_fd = -1;
@@ -19,7 +21,10 @@ int pipe1 = -1;
 int pipe2 = -1;
 
 sem_t *semaphoreList[] = {NULL, NULL, NULL, NULL, NULL};
-char *nameList[] = {"fib_sem", "fdisplay_sem", "pow_sem", "pdisplay_sem", "raceSem"};
+
+char *nameList[] = {"fib_sem", "fdisplay_sem", "pow_sem", 
+                    "pdisplay_sem", "raceSem"};
+
 
 void clean_resources(){
         for(int i = 0; i<5; i++){
@@ -73,7 +78,9 @@ void terminate(){
         clean_resources();
         // codigo para enviar señal de interrupcion a p3 y p4.
         if(fork() == 0){
-                execlp("bash", "bash", "-c", "pkill -x -SIGTERM p3; pkill -x -SIGTERM p4;", NULL);
+                execlp("bash", "bash", "-c", 
+                       "pkill -x -SIGTERM p3; pkill -x -SIGTERM p4;", 
+                       NULL);
         }else{
                 wait(NULL);
         }
@@ -94,7 +101,6 @@ void handler(int sig){
 }
 
 
-// agregar err handling.
 void fib(int* pbuffer,int a1, int a2, int N){
         int fibnum, ant, tmp;
         tmp = a2;
@@ -160,7 +166,6 @@ void twopow(int *pbuffer, int a3, int N){
             }
             pow *= 2;
 
-            // postear mutex para lectura.
             if(sem_post(sr2) == -1){
                     perror("post sr2 failed");
                     exit(1);
@@ -183,7 +188,7 @@ int main(int argc, char *argv[]) {
         //y tiene esperas entre los prints, el proposito de esto es
         //testear la sincronizacion.
         if(argc == 6){
-                DBG = atoi(argv[5]);
+                DBG = (atoi(argv[5])==1 ? 1 : 0);
         }else if (argc < 5) {
                 printf("Uso: p1 a1 a2 a3 N.\n");
                 return -1;
@@ -197,7 +202,7 @@ int main(int argc, char *argv[]) {
         ////Termina el programa al presionar CTRL + C
 	    signal(SIGINT, handler);
         //Termina el programa cuando recibe señales de los otros procesos
-        signal(SIGTERM, handler);         
+        signal(SIGTERM, handler);
 
         //validar existencia de p3 y p4
         //si p3 y p4 existen, fallara la creacion con sem open
@@ -282,7 +287,10 @@ int main(int argc, char *argv[]) {
                 return -1;
         }
 
-        pbuffer = (int *) mmap(NULL, sizeof(int), PROT_WRITE | PROT_READ, MAP_SHARED, shm_fd, 0);
+        pbuffer = (int *) mmap(NULL, sizeof(int), 
+                        PROT_WRITE | PROT_READ, MAP_SHARED, 
+                        shm_fd, 0);
+
         if(pbuffer == MAP_FAILED){
                 perror("map fail");
                 terminate();
@@ -408,4 +416,3 @@ int main(int argc, char *argv[]) {
         clean_resources(); 
         return 0;
 }
-

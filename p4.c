@@ -55,7 +55,10 @@ void terminate(){
         clean_resources();
         // codigo para enviar señal de interrupcion a p3 y p1.
         if(fork() == 0){
-                execlp("bash", "bash", "-c", "pkill -x -SIGTERM p3; pkill -x -SIGTERM p1;", NULL);
+                execlp("bash", "bash", "-c", 
+                       "pkill -x -SIGTERM p3; pkill -x -SIGTERM p1;", 
+                       NULL);
+
                 terminate();
         }else{
                 wait(NULL);
@@ -92,15 +95,19 @@ int main(int argc, char *argv[]){
         }
 
 
-        shm_descriptor = shm_open("shareBuff", O_RDWR, 0666);   //todavía no se cual es el mode indicado, el ejemplo de man usa 0600.
+        shm_descriptor = shm_open("shareBuff", O_RDWR, 0666);
         
         
-        if (shm_descriptor == -1 || ftruncate(shm_descriptor, sizeof(int)) == -1) {
+        if (shm_descriptor == -1 || 
+            ftruncate(shm_descriptor, sizeof(int)) == -1) {
+
                 perror("shm error"); 
                 terminate();
                 return -1;
         }
-        pbuffer = (int *) mmap(NULL, sizeof(int), PROT_READ, MAP_SHARED, shm_descriptor, 0); 
+        pbuffer = (int *) mmap(NULL, sizeof(int), 
+                   PROT_READ, MAP_SHARED, 
+                   shm_descriptor, 0); 
 
         if (pbuffer == MAP_FAILED) {
                 perror("mmap failed"); 

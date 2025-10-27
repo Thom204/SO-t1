@@ -56,7 +56,9 @@ void terminate(){
         clean_resources();
         // codigo para enviar señal de interrupcion a p1 y p4.
         if(fork() == 0){
-                execlp("bash", "bash", "-c", "pkill -x -SIGTERM p1; pkill -x -SIGTERM p4;", NULL);
+                execlp("bash", "bash", "-c", 
+                       "pkill -x -SIGTERM p1; pkill -x -SIGTERM p4;", 
+                       NULL);
         }else{
                 wait(NULL);
         }
@@ -81,13 +83,17 @@ int main(int argc, char *argv[]){
         signal(SIGINT, handler);
         signal(SIGTERM, handler);
         
-        if (shm_descriptor == -1 || ftruncate(shm_descriptor, sizeof(int)) == -1) {
-                perror("shm error"); 
+        if (shm_descriptor == -1 || 
+            ftruncate(shm_descriptor, sizeof(int)) == -1) {
+
+                perror("shm error");
                 terminate();
                 return -1;
         }
 
-        pbuffer = (int *) mmap(NULL, sizeof(int), PROT_READ | PROT_WRITE, MAP_SHARED, shm_descriptor, 0); 
+        pbuffer = (int *) mmap(NULL, sizeof(int), 
+                   PROT_READ | PROT_WRITE, MAP_SHARED, 
+                   shm_descriptor, 0); 
 
         if (pbuffer == MAP_FAILED){ 
                 perror("mmap failed"); 
