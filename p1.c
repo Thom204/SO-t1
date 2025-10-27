@@ -10,7 +10,7 @@
 #include <signal.h>
 #include <sys/wait.h>
 
-int DBG = 0; 
+int DBG = 0;
 sem_t *sw1, *sr1, *sw2, *sr2, *rcsem;
 int sval1, sval2;
 int *pbuffer = NULL;
@@ -177,7 +177,7 @@ int main(int argc, char *argv[]) {
 
 	    //Implementación del handler 
         ////Termina el programa al presionar CTRL + C
-	    signal(SIGINT, handler);
+	signal(SIGINT, handler);
         //Termina el programa cuando recibe señales de los otros procesos
         signal(SIGTERM, handler);         
 

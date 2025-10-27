@@ -7,18 +7,65 @@
 #include <semaphore.h>
 #include <stdlib.h>
 #include <signal.h>
+#include <sys/wait.h>
 
 sem_t *sw1, *sr1, *sw2, *sr2,*rcsem;
 int *pbuffer = NULL;
 int shm_descriptor = -1;
+int shm_fd = -1;
+int pipe1 = -1;
+int pipe2 = -1;
+
+
+sem_t *semaphoreList[] = {NULL, NULL, NULL, NULL, NULL};
+char *nameList[] = {"fib_sem", "fdisplay_sem", "pow_sem", "pdisplay_sem", "raceSem"};
 
 void clean_resources(){
+        for(int i = 0; i<5; i++){
+                if(semaphoreList[i] == NULL){
+                        continue;
+                }else{
+                        sem_close(semaphoreList[i]);
+                        sem_unlink(nameList[i]);
+                }
+        }
 
-        munmap(pbuffer, sizeof(int));
-        close(shm_descriptor);
-        sem_close(sw1);
-        sem_close(sr1);
-        sem_close(sw2);
+        if(shm_fd != -1){
+                close(shm_fd);
+                shm_unlink("shareBuff");
+        }
+        if(pbuffer != NULL || pbuffer != MAP_FAILED){
+                munmap(pbuffer, sizeof(int));
+        }
+        if(pipe1 != -1){
+                close(pipe1);
+                unlink("/dev/shm/p1-p3_pipe");
+        }
+        if(pipe2 != -1){
+                close(pipe2);
+                unlink("/dev/shm/p2-p4_pipe");
+        }
+}
+
+int verifySems(){
+        for(int i = 0; i<5; i++){
+                if(semaphoreList[i] == SEM_FAILED){
+                        return -1;
+                }else if(semaphoreList[i] == NULL){
+                        return 0;
+                }
+        }
+        return 0;
+}
+
+void terminate(){
+        clean_resources();
+        // codigo para enviar señal de interrupcion a p3 y p4.
+        if(fork() == 0){
+                execlp("bash", "bash", "-c", "pkill -x -SIGINT p3; pkill -x -SIGINT p4;", NULL);
+        }else{
+                wait(NULL);
+        }
 }
 
 
